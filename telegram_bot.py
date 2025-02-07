@@ -1,21 +1,24 @@
+import os
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import FSInputFile
 from aiogram.filters import Command
-from aiogram.utils import markdown
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiohttp import web
 
-# 🔹 Ваш API-токен
-API_TOKEN = "7735427380:AAGQgL3Arrl4evlhf0vg7X4Pu1iGLS03DjU"
-
-# 🔹 Данные админа
-ADMIN_ID = 770819003  # Проверь, что это твой настоящий ID
-
-# 🔹 Включаем логирование
+# 🔹 Логирование
 logging.basicConfig(level=logging.INFO)
 
-# 🔹 Создаем бота и диспетчер с памятью
+# 🔹 API-токен бота из переменных среды
+API_TOKEN = os.getenv("BOT_TOKEN")
+if not API_TOKEN:
+    raise ValueError("Не найден BOT_TOKEN! Установите переменную окружения.")
+
+# 🔹 Данные админа (из переменной среды, если есть)
+ADMIN_ID = int(os.getenv("ADMIN_ID", 770819003))
+
+# 🔹 Инициализация бота и диспетчера
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -43,7 +46,7 @@ async def start_command(message: types.Message):
     user_data[message.from_user.id] = {
         "stage": 1,
         "answers": [],
-        "phone": message.from_user.phone_number if hasattr(message.from_user, 'phone_number') else "❌ Номер не надано"
+        "phone": "❌ Номер не надано"
     }
 
     await asyncio.sleep(7)
@@ -104,10 +107,23 @@ async def send_admin_notification(user_id, username):
     except Exception as e:
         logging.error(f"❌ Помилка при відправці повідомлення адміну: {e}")
 
-# 🔹 Запуск бота
+# 🔹 Фейковый веб-сервер для Render
+async def handle(request):
+    return web.Response(text="Bot is running!")
+
+async def run_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+    
+    port = int(os.getenv("PORT", 8080))  # Render требует порт
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+# 🔹 Запуск бота и сервера одновременно
 async def main():
-    """Функция запуска бота."""
-    await dp.start_polling(bot)
+    await asyncio.gather(dp.start_polling(bot), run_server())
 
 if __name__ == "__main__":
     asyncio.run(main())
